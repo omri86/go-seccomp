@@ -7,44 +7,45 @@ import (
 )
 
 func main() {
-	err := loadSeccompFilter()
-	if err != nil {
+	if err := loadSeccompFilter(); err != nil {
 		fmt.Println(fmt.Sprintf("Failed to load seccomp filter: %v", err))
 		return
 	}
 
+	const dirPath = "/tmp/info"
 	// Running the whitelisted code
-	err = syscall.Mkdir("/tmp/info", 0600)
-	if err != nil {
-		fmt.Println(fmt.Sprintf("Failed creating folder: %v", err))
+	if err := syscall.Mkdir(dirPath, 0600); err != nil {
+		fmt.Printf("Failed creating directory: %v\n", err)
 		return
 	}
-	fmt.Println("Folder created successfully")
+	fmt.Printf("Directory %q created successfully\n", dirPath)
 
-	// Trying to run non permitted syscalls
+	// Trying to run non whitelisted syscall
 	fmt.Println("Trying to get current working directory")
 	wd, err := syscall.Getwd()
 	if err != nil {
-		fmt.Println(fmt.Sprintf("Failed getting current working directory: %v", err))
+		fmt.Printf("Failed getting current working directory: %v\n", err)
 		return
 	}
-	fmt.Println(fmt.Sprintf("Current working directory is: %s", wd))
+	fmt.Printf("Current working directory is: %s\n", wd)
 }
 
 func loadSeccompFilter() error {
+	whitelist := []string{
+		"futex", "mkdirat", "nanosleep", "readlinkat",
+		"write", "mmap", "fcntl", "sigaltstack",
+		"rt_sigprocmask", "arch_prctl", "gettid",
+		"read", "close", "rt_sigaction", "clone",
+		"execve", "uname", "mlock", "sched_getaffinity", "openat",
+	}
+
 	// The filter defaults to fail all syscalls
 	filter, err := seccomp.NewFilter(seccomp.ActErrno.SetReturnCode(int16(syscall.EPERM)))
 	if err != nil {
 		return err
 	}
 	// Whitelist relevant syscalls and load the filter
-	for _, name := range []string{
-		"futex", "mkdirat", "nanosleep", "readlinkat",
-		"write", "mmap", "fcntl", "sigaltstack",
-		"rt_sigprocmask", "arch_prctl", "gettid",
-		"read", "close", "rt_sigaction", "clone",
-		"execve", "uname", "mlock", "sched_getaffinity", "openat",
-	} {
+	for _, name := range whitelist {
 		syscallID, err := seccomp.GetSyscallFromName(name)
 		if err != nil {
 			return err
